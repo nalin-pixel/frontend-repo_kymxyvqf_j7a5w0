@@ -1,198 +1,107 @@
-import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import Navbar from './components/Navbar.jsx';
-import HeroSpline from './components/HeroSpline.jsx';
-import LoginCard from './components/LoginCard.jsx';
-import Dashboard from './components/Dashboard.jsx';
-import Footer from './components/Footer.jsx';
+import React, { useEffect, useMemo, useState } from 'react';
+import Navbar from './components/Navbar';
+import LoginCard from './components/LoginCard';
+import Dashboard from './components/Dashboard';
+import Profile from './components/Profile';
+import Settings from './components/Settings';
+import Footer from './components/Footer';
+import HeroSpline from './components/HeroSpline';
 
-function App() {
-  const [user, setUser] = useState(null);
+function nowParts() {
+  const d = new Date();
+  const pad = (n) => n.toString().padStart(2, '0');
+  const tanggal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const jam = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return { tanggal, jam };
+}
+
+export default function App() {
   const [page, setPage] = useState('dashboard');
-
-  // Nama perusahaan dengan persistensi localStorage
-  const [companyName, setCompanyName] = useState(() => {
-    return localStorage.getItem('company_name') || 'Sistem Absen';
+  const [user, setUser] = useState(() => {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
   });
-  const [companyDraft, setCompanyDraft] = useState(companyName);
+  const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('absen_records') || '[]'));
+  const [companyName, setCompanyName] = useState(() => localStorage.getItem('company_name') || 'Sistem Absen');
 
   useEffect(() => {
-    setCompanyDraft(companyName);
-  }, [companyName]);
+    localStorage.setItem('absen_records', JSON.stringify(records));
+  }, [records]);
 
-  const handleLoginSuccess = (u) => {
+  function handleLogin(u) {
     setUser(u);
-    setPage('dashboard');
-  };
+    localStorage.setItem('user', JSON.stringify(u));
+    // Placeholder: backend email notification would be triggered here via API
+  }
 
-  const handleLogout = () => {
+  function handleLogout() {
     setUser(null);
-    setPage('dashboard');
-  };
+    localStorage.removeItem('user');
+  }
 
-  const handleUpdateUser = (updated) => {
-    setUser(updated);
-  };
+  function onAbsenMasuk() {
+    const { tanggal, jam } = nowParts();
+    const newRec = { tanggal, jamMasuk: jam, ket: 'Menunggu Pulang' };
+    setRecords((prev) => [newRec, ...prev]);
+  }
 
-  const handleSaveCompany = () => {
-    const name = companyDraft.trim();
-    if (!name) return;
-    setCompanyName(name);
-    localStorage.setItem('company_name', name);
-  };
+  function onAbsenPulang() {
+    const { jam } = nowParts();
+    setRecords((prev) => {
+      const idx = prev.findIndex((r) => r.ket === 'Menunggu Pulang');
+      if (idx === -1) return prev;
+      const start = prev[idx].jamMasuk;
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = jam.split(':').map(Number);
+      const dur = (eh * 60 + em) - (sh * 60 + sm);
+      const h = Math.floor(dur / 60).toString().padStart(2, '0');
+      const m = (dur % 60).toString().padStart(2, '0');
+      const updated = { ...prev[idx], jamPulang: jam, durasi: `${h}:${m}`, ket: 'Belum Submit' };
+      const copy = [...prev];
+      copy[idx] = updated;
+      return [...copy];
+    });
+  }
+
+  function onSubmitKonfirmasi() {
+    setRecords((prev) => prev.map((r) => (r.ket === 'Belum Submit' ? { ...r, ket: 'Terkonfirmasi' } : r)));
+  }
+
+  function onUpdateUser(next) {
+    setUser(next);
+    localStorage.setItem('user', JSON.stringify(next));
+  }
+
+  const content = useMemo(() => {
+    if (!user) {
+      return (
+        <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
+          <HeroSpline />
+          <LoginCard onLogin={handleLogin} />
+        </div>
+      );
+    }
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <Navbar companyName={companyName} page={page} setPage={setPage} user={user} onLogout={handleLogout} />
+        {page === 'dashboard' && (
+          <Dashboard
+            records={records}
+            onAbsenMasuk={onAbsenMasuk}
+            onAbsenPulang={onAbsenPulang}
+            onSubmitKonfirmasi={onSubmitKonfirmasi}
+          />
+        )}
+        {page === 'profile' && <Profile user={user} onUpdateUser={onUpdateUser} />}
+        {page === 'settings' && <Settings companyName={companyName} setCompanyName={setCompanyName} />}
+      </div>
+    );
+  }, [user, page, records, companyName]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-white text-slate-800">
-      {!user ? (
-        <>
-          <HeroSpline />
-          <LoginCard onSuccess={handleLoginSuccess} onRegister={() => alert('Form pendaftaran akan ditambahkan.')} />
-          <Footer />
-        </>
-      ) : (
-        <>
-          <Navbar onSelect={setPage} user={user} onLogout={handleLogout} companyName={companyName} />
-          <AnimatePresence mode="wait">
-            {page === 'dashboard' && (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-              >
-                <Dashboard user={user} onUpdateUser={handleUpdateUser} />
-              </motion.div>
-            )}
-
-            {page === 'profile' && (
-              <motion.section
-                key="profile"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="max-w-3xl mx-auto px-4 py-12"
-              >
-                <h2 className="text-xl font-semibold mb-6">Profil</h2>
-                <div className="rounded-xl border border-slate-200 bg-white p-6 flex items-center gap-6">
-                  <img
-                    src={user?.photo || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`}
-                    alt="avatar"
-                    className="h-16 w-16 rounded-full border object-cover"
-                  />
-                  <div>
-                    <p className="text-slate-900 font-medium">{user.name}</p>
-                    <p className="text-slate-500 text-sm">{user.email}</p>
-                    <p className="text-emerald-600 text-sm mt-1">Status: Aktif</p>
-                  </div>
-                </div>
-              </motion.section>
-            )}
-
-            {page === 'settings' && (
-              <motion.section
-                key="settings"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="max-w-3xl mx-auto px-4 py-12"
-              >
-                <h2 className="text-xl font-semibold mb-6">Pengaturan</h2>
-                <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-6">
-                  <div>
-                    <label className="block text-sm text-slate-600 mb-1">Nama Perusahaan</label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        value={companyDraft}
-                        onChange={(e) => setCompanyDraft(e.target.value)}
-                        placeholder="Masukkan nama perusahaan"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none"
-                      />
-                      <button
-                        onClick={handleSaveCompany}
-                        className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-black"
-                        type="button"
-                        aria-label="Simpan nama perusahaan"
-                      >
-                        Simpan
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">Nama ini tampil di bagian atas aplikasi.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-600 mb-2">Ganti Background</label>
-                    <div className="flex gap-3">
-                      <Swatch color="from-sky-50 via-indigo-50 to-white" label="Biru" />
-                      <Swatch color="from-emerald-50 via-teal-50 to-white" label="Hijau" />
-                      <Swatch color="from-rose-50 via-pink-50 to-white" label="Merah" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-slate-800">Privasi Data</p>
-                      <p className="text-slate-500 text-sm">Tampilkan email pada profil</p>
-                    </div>
-                    <input type="checkbox" defaultChecked className="h-5 w-5" />
-                  </div>
-                </div>
-              </motion.section>
-            )}
-
-            {page === 'addAccount' && (
-              <motion.section
-                key="addAccount"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className="max-w-3xl mx-auto px-4 py-12"
-              >
-                <h2 className="text-xl font-semibold mb-6">Tambah Akun</h2>
-                <form
-                  onSubmit={(e) => { e.preventDefault(); alert('Akun baru berhasil ditambahkan (demo).'); }}
-                  className="rounded-xl border border-slate-200 bg-white p-6 grid gap-4"
-                >
-                  <div>
-                    <label className="block text-sm text-slate-600 mb-1">Nama</label>
-                    <input className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none" required />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-600 mb-1">Email</label>
-                    <input type="email" className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none" required />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-600 mb-1">Password</label>
-                    <input type="password" className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none" required />
-                  </div>
-                  <div className="text-right">
-                    <button className="px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700">Tambah</button>
-                  </div>
-                </form>
-              </motion.section>
-            )}
-          </AnimatePresence>
-
-          <Footer />
-        </>
-      )}
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
+      {content}
+      <Footer />
     </div>
   );
 }
-
-function Swatch({ color, label }) {
-  return (
-    <button
-      onClick={() => document.body.classList.add('transition-colors')}
-      className={`h-10 w-10 rounded-lg bg-gradient-to-br ${color} border border-slate-200`}
-      title={label}
-      aria-label={label}
-      type="button"
-    />
-  );
-}
-
-export default App;

@@ -1,83 +1,63 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
 
-export default function LoginCard({ onSuccess, onRegister }) {
+export default function LoginCard({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    // Simulate async login then transition
-    setTimeout(() => {
+    try {
+      // Simulasi login async
+      await new Promise((r) => setTimeout(r, 800));
+      if (!email || !password) throw new Error('Masukkan email dan kata sandi');
+      const user = { name: email.split('@')[0] || 'Pengguna', email };
+      onLogin(user);
+    } catch (err) {
+      setError(err.message || 'Terjadi kesalahan');
+    } finally {
       setLoading(false);
-      if (email && password) {
-        onSuccess?.({ name: email.split('@')[0] || 'Pengguna', email });
-      } else {
-        setError('Email dan password wajib diisi.');
-      }
-    }, 900);
-  };
+    }
+  }
 
   return (
-    <div className="relative max-w-md mx-auto -mt-32">
-      <AnimatePresence>
-        <motion.div
-          key="card"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.4 }}
-          className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur p-6 shadow-xl"
+    <div className="w-full max-w-md mx-auto bg-white/70 backdrop-blur rounded-xl shadow-sm border border-slate-200 p-6">
+      <h2 className="text-xl font-semibold text-slate-900">Masuk</h2>
+      <p className="text-sm text-slate-600 mb-4">Gunakan akun perusahaan Anda</p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {error && <div className="text-sm text-red-600">{error}</div>}
+        <div className="relative">
+          <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="email"
+            className="w-full pl-10 pr-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="email@perusahaan.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="relative">
+          <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="password"
+            className="w-full pl-10 pr-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Kata sandi"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          <h1 className="text-2xl font-semibold text-slate-800 text-center mb-6">Sistem Absensi Karyawan</h1>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="nama@perusahaan.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {error && <p className="text-sm text-rose-600">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white py-2.5 transition-colors"
-            >
-              {loading ? 'Memproses…' : 'Login'}
-            </button>
-          </form>
-
-          <div className="text-center mt-3">
-            <button onClick={onRegister} className="text-sm text-slate-600 hover:text-slate-800 underline">
-              Buat Akun Baru
-            </button>
-          </div>
-        </motion.div>
-      </AnimatePresence>
+          {loading && <Loader2 className="animate-spin" size={18} />} Masuk
+        </button>
+      </form>
     </div>
   );
 }

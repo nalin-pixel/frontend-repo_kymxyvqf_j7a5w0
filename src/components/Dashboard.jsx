@@ -1,250 +1,70 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Clock, LogIn, LogOut, Pencil, Check, X, ImagePlus } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { CheckCircle2, Clock, FileDown } from 'lucide-react';
 
-function formatDateTime(date) {
-  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-  const d = new Date(date);
-  const hariStr = hari[d.getDay()];
-  const tanggal = d.getDate();
-  const bulanStr = bulan[d.getMonth()];
-  const tahun = d.getFullYear();
-  const pad = (n) => String(n).padStart(2, '0');
-  const jam = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  return { tanggalLengkap: `${hariStr}, ${tanggal} ${bulanStr} ${tahun}`, jam };
+function toCSV(rows) {
+  const header = ['Tanggal', 'Jam Masuk', 'Jam Pulang', 'Durasi', 'Keterangan'];
+  const data = rows.map(r => [r.tanggal, r.jamMasuk, r.jamPulang || '', r.durasi || '', r.ket]);
+  return [header, ...data].map(line => line.map(v => `"${(v ?? '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
 }
 
-export default function Dashboard({ user, onUpdateUser }) {
-  const [now, setNow] = useState(new Date());
-  const [records, setRecords] = useState(() => {
-    const saved = localStorage.getItem('absen_records');
-    return saved ? JSON.parse(saved) : [];
-  });
+export default function Dashboard({ records = [], onAbsenMasuk, onAbsenPulang, onSubmitKonfirmasi }) {
+  const canSubmit = useMemo(() => records.some(r => r.ket === 'Belum Submit'), [records]);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState(user?.name || '');
-  const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    setNameDraft(user?.name || '');
-  }, [user?.name]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('absen_records', JSON.stringify(records));
-  }, [records]);
-
-  const { tanggalLengkap, jam } = useMemo(() => formatDateTime(now), [now]);
-
-  const absenMasuk = () => {
-    setRecords((prev) => [
-      ...prev,
-      { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: jam, jamPulang: '-', durasi: '-', ket: 'Menunggu Pulang' },
-    ]);
-  };
-
-  const absenPulang = () => {
-    setRecords((prev) => {
-      const copy = [...prev];
-      for (let i = copy.length - 1; i >= 0; i--) {
-        if (copy[i].nama === (user?.name || 'Pengguna') && copy[i].jamPulang === '-') {
-          const start = copy[i].jamMasuk;
-          const [sh, sm, ss] = start.split(':').map(Number);
-          const startDate = new Date(now);
-          startDate.setHours(sh || 0, sm || 0, ss || 0, 0);
-          const diffMs = now - startDate;
-          const hh = Math.max(0, Math.floor(diffMs / 3600000));
-          const mm = Math.max(0, Math.floor((diffMs % 3600000) / 60000));
-          copy[i] = { ...copy[i], jamPulang: jam, durasi: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, ket: 'Belum Submit' };
-          return copy;
-        }
-      }
-      // jika tidak ada record masuk, buat entri pulang mandiri (tetap butuh submit)
-      return [
-        ...copy,
-        { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: '-', jamPulang: jam, durasi: '00:00', ket: 'Belum Submit' },
-      ];
-    });
-  };
-
-  const hasUnsubmitted = useMemo(() => {
-    return records.some(r => r.nama === (user?.name || 'Pengguna') && r.ket === 'Belum Submit');
-  }, [records, user?.name]);
-
-  const submit = () => {
-    // Submit hanya berfungsi ketika sudah absen pulang (ket: Belum Submit)
-    setRecords((prev) => {
-      const copy = [...prev];
-      for (let i = copy.length - 1; i >= 0; i--) {
-        if (copy[i].nama === (user?.name || 'Pengguna') && copy[i].ket === 'Belum Submit') {
-          copy[i] = { ...copy[i], ket: 'Terkonfirmasi' };
-          break;
-        }
-      }
-      return copy;
-    });
-  };
-
-  const exportCSV = () => {
-    const header = ['Nama Karyawan','Tanggal','Jam Masuk','Jam Pulang','Durasi','Keterangan'];
-    const rows = records.map(r => [r.nama, r.tanggal, r.jamMasuk, r.jamPulang, r.durasi, r.ket]);
-    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/\"/g,'\"')}"`).join(',')).join('\n');
+  function exportCSV() {
+    const csv = toCSV(records);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'rekap-absensi.csv';
+    a.download = 'absensi.csv';
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handleSaveName = () => {
-    const newName = nameDraft.trim();
-    if (!newName) return;
-    onUpdateUser?.({ ...user, name: newName });
-    setIsEditing(false);
-  };
-
-  const handlePickPhoto = () => fileInputRef.current?.click();
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      onUpdateUser?.({ ...user, photo: dataUrl });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const avatarSrc = user?.photo
-    ? user.photo
-    : `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'User')}`;
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="text-center mb-8">
-        <p className="text-slate-500">{tanggalLengkap}</p>
-        <div className="mt-1 inline-flex items-center gap-2 text-3xl font-mono tracking-widest text-slate-800">
-          <Clock className="h-7 w-7 text-sky-600" />
-          <span>{jam}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-4 mb-8">
-        <div className="relative">
-          <img src={avatarSrc} alt="avatar" className="h-16 w-16 rounded-full border object-cover" />
-          <button
-            onClick={handlePickPhoto}
-            className="absolute -bottom-2 -right-2 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white border border-slate-200 shadow hover:bg-slate-50"
-            title="Ubah foto profil"
-            type="button"
-          >
-            <ImagePlus className="h-4 w-4 text-slate-700" />
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-        </div>
-
-        <div className="text-center">
-          <p className="text-slate-500 text-sm">Karyawan</p>
-          {!isEditing ? (
-            <div className="flex items-center justify-center gap-2">
-              <p className="text-slate-800 font-medium">{user?.name || 'Pengguna'}</p>
-              <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700" title="Edit nama" type="button">
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center gap-2">
-              <input
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                className="px-2 py-1 rounded border border-slate-300 focus:ring-2 focus:ring-sky-500 outline-none"
-              />
-              <button onClick={handleSaveName} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
-                <Check className="h-4 w-4" /> Simpan
-              </button>
-              <button onClick={() => { setIsEditing(false); setNameDraft(user?.name || ''); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200">
-                <X className="h-4 w-4" /> Batal
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-        <button onClick={absenMasuk} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
-          <LogIn className="h-4 w-4" />
-          Absen Masuk
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <button onClick={onAbsenMasuk} className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700">Absen Masuk</button>
+        <button onClick={onAbsenPulang} className="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-700">Absen Pulang</button>
+        <button onClick={onSubmitKonfirmasi} disabled={!canSubmit} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+          <CheckCircle2 size={18} /> Submit
         </button>
-        <button onClick={absenPulang} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition">
-          <LogOut className="h-4 w-4" />
-          Absen Pulang
-        </button>
-        <button
-          onClick={submit}
-          disabled={!hasUnsubmitted}
-          className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white shadow-sm transition ${hasUnsubmitted ? 'bg-violet-600 hover:bg-violet-700' : 'bg-violet-300 cursor-not-allowed'}`}
-          title={hasUnsubmitted ? 'Konfirmasi rekap' : 'Submit aktif setelah Absen Pulang'}
-        >
-          Submit
+        <button onClick={exportCSV} className="px-4 py-2 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-2">
+          <FileDown size={18} /> Export CSV
         </button>
       </div>
-      <p className="text-center text-xs text-slate-500 mb-6">Submit hanya aktif setelah Absen Pulang dan digunakan untuk mengkonfirmasi rekap.</p>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between p-4">
-          <h3 className="font-medium text-slate-800">Rekap Absensi</h3>
-          <button onClick={exportCSV} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white hover:bg-black">
-            <Download className="h-4 w-4" />
-            Ekspor ke Excel
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-600">
+            <tr>
+              <th className="text-left px-3 py-2">Tanggal</th>
+              <th className="text-left px-3 py-2">Jam Masuk</th>
+              <th className="text-left px-3 py-2">Jam Pulang</th>
+              <th className="text-left px-3 py-2">Durasi</th>
+              <th className="text-left px-3 py-2">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.length === 0 && (
               <tr>
-                <Th>Nama Karyawan</Th>
-                <Th>Tanggal</Th>
-                <Th>Jam Masuk</Th>
-                <Th>Jam Pulang</Th>
-                <Th>Durasi</Th>
-                <Th>Keterangan</Th>
+                <td colSpan={5} className="px-3 py-6 text-center text-slate-500 flex items-center justify-center gap-2">
+                  <Clock size={18} /> Belum ada data absensi
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {records.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-8 text-slate-400">Belum ada data.</td>
-                </tr>
-              ) : (
-                records.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50">
-                    <Td>{r.nama}</Td>
-                    <Td>{r.tanggal}</Td>
-                    <Td>{r.jamMasuk}</Td>
-                    <Td>{r.jamPulang}</Td>
-                    <Td>{r.durasi}</Td>
-                    <Td>{r.ket}</Td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            )}
+            {records.map((r, idx) => (
+              <tr key={idx} className="border-t border-slate-100">
+                <td className="px-3 py-2">{r.tanggal}</td>
+                <td className="px-3 py-2">{r.jamMasuk}</td>
+                <td className="px-3 py-2">{r.jamPulang || '-'}</td>
+                <td className="px-3 py-2">{r.durasi || '-'}</td>
+                <td className="px-3 py-2">{r.ket}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
-}
-
-function Th({ children }) {
-  return <th className="px-4 py-3 font-medium text-left">{children}</th>;
-}
-function Td({ children }) {
-  return <td className="px-4 py-3 text-slate-700">{children}</td>;
 }
