@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Navbar from './components/Navbar.jsx';
 import HeroSpline from './components/HeroSpline.jsx';
@@ -9,6 +9,16 @@ import Footer from './components/Footer.jsx';
 function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('dashboard');
+
+  // Nama perusahaan dengan persistensi localStorage
+  const [companyName, setCompanyName] = useState(() => {
+    return localStorage.getItem('company_name') || 'Sistem Absen';
+  });
+  const [companyDraft, setCompanyDraft] = useState(companyName);
+
+  useEffect(() => {
+    setCompanyDraft(companyName);
+  }, [companyName]);
 
   const handleLoginSuccess = (u) => {
     setUser(u);
@@ -24,6 +34,13 @@ function App() {
     setUser(updated);
   };
 
+  const handleSaveCompany = () => {
+    const name = companyDraft.trim();
+    if (!name) return;
+    setCompanyName(name);
+    localStorage.setItem('company_name', name);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-white text-slate-800">
       {!user ? (
@@ -34,7 +51,7 @@ function App() {
         </>
       ) : (
         <>
-          <Navbar onSelect={setPage} user={user} onLogout={handleLogout} />
+          <Navbar onSelect={setPage} user={user} onLogout={handleLogout} companyName={companyName} />
           <AnimatePresence mode="wait">
             {page === 'dashboard' && (
               <motion.div
@@ -85,6 +102,27 @@ function App() {
                 <h2 className="text-xl font-semibold mb-6">Pengaturan</h2>
                 <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-6">
                   <div>
+                    <label className="block text-sm text-slate-600 mb-1">Nama Perusahaan</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        value={companyDraft}
+                        onChange={(e) => setCompanyDraft(e.target.value)}
+                        placeholder="Masukkan nama perusahaan"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none"
+                      />
+                      <button
+                        onClick={handleSaveCompany}
+                        className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-black"
+                        type="button"
+                        aria-label="Simpan nama perusahaan"
+                      >
+                        Simpan
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Nama ini tampil di bagian atas aplikasi.</p>
+                  </div>
+
+                  <div>
                     <label className="block text-sm text-slate-600 mb-2">Ganti Background</label>
                     <div className="flex gap-3">
                       <Swatch color="from-sky-50 via-indigo-50 to-white" label="Biru" />
@@ -92,15 +130,13 @@ function App() {
                       <Swatch color="from-rose-50 via-pink-50 to-white" label="Merah" />
                     </div>
                   </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-800">Privasi Data</p>
                       <p className="text-slate-500 text-sm">Tampilkan email pada profil</p>
                     </div>
                     <input type="checkbox" defaultChecked className="h-5 w-5" />
-                  </div>
-                  <div className="text-right">
-                    <button className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-black">Simpan Perubahan</button>
                   </div>
                 </div>
               </motion.section>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Menu, User, LayoutDashboard, Settings, LogOut, PlusCircle } from 'lucide-react';
 
-export default function Navbar({ onSelect, user, onLogout }) {
+export default function Navbar({ onSelect, user, onLogout, companyName = 'Sistem Absen' }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -9,7 +9,7 @@ export default function Navbar({ onSelect, user, onLogout }) {
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-md bg-gradient-to-tr from-sky-500 to-indigo-500" />
-          <span className="font-semibold text-slate-800">Sistem Absen</span>
+          <span className="font-semibold text-slate-800">{companyName}</span>
         </div>
 
         <div className="relative">
