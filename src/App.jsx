@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.jsx';
 import HeroSpline from './components/HeroSpline.jsx';
 import LoginCard from './components/LoginCard.jsx';
 import Dashboard from './components/Dashboard.jsx';
+import Footer from './components/Footer.jsx';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -19,17 +20,17 @@ function App() {
     setPage('dashboard');
   };
 
+  const handleUpdateUser = (updated) => {
+    setUser(updated);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-white text-slate-800">
       {!user ? (
         <>
           <HeroSpline />
           <LoginCard onSuccess={handleLoginSuccess} onRegister={() => alert('Form pendaftaran akan ditambahkan.')} />
-          <footer className="mt-16 border-t border-slate-200 bg-white/70 backdrop-blur">
-            <div className="max-w-6xl mx-auto px-4 py-6 text-center text-slate-500 text-sm">
-              <p><strong>Powered by : Robert</strong></p>
-            </div>
-          </footer>
+          <Footer />
         </>
       ) : (
         <>
@@ -43,7 +44,7 @@ function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25 }}
               >
-                <Dashboard user={user} />
+                <Dashboard user={user} onUpdateUser={handleUpdateUser} />
               </motion.div>
             )}
 
@@ -59,9 +60,9 @@ function App() {
                 <h2 className="text-xl font-semibold mb-6">Profil</h2>
                 <div className="rounded-xl border border-slate-200 bg-white p-6 flex items-center gap-6">
                   <img
-                    src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`}
+                    src={user?.photo || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`}
                     alt="avatar"
-                    className="h-16 w-16 rounded-full border"
+                    className="h-16 w-16 rounded-full border object-cover"
                   />
                   <div>
                     <p className="text-slate-900 font-medium">{user.name}</p>
@@ -139,11 +140,7 @@ function App() {
             )}
           </AnimatePresence>
 
-          <footer className="mt-16 border-t border-slate-200 bg-white/70 backdrop-blur">
-            <div className="max-w-6xl mx-auto px-4 py-6 text-center text-slate-500 text-sm">
-              <p><strong>Powered by : Robert</strong></p>
-            </div>
-          </footer>
+          <Footer />
         </>
       )}
     </div>

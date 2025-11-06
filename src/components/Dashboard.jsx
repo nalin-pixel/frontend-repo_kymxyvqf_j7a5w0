@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Download, Clock, LogIn, LogOut } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Clock, LogIn, LogOut, Pencil, Check, X, ImagePlus } from 'lucide-react';
 
 function formatDateTime(date) {
   const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -14,12 +14,20 @@ function formatDateTime(date) {
   return { tanggalLengkap: `${hariStr}, ${tanggal} ${bulanStr} ${tahun}`, jam };
 }
 
-export default function Dashboard({ user }) {
+export default function Dashboard({ user, onUpdateUser }) {
   const [now, setNow] = useState(new Date());
   const [records, setRecords] = useState(() => {
     const saved = localStorage.getItem('absen_records');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user?.name || '');
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    setNameDraft(user?.name || '');
+  }, [user?.name]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -35,11 +43,11 @@ export default function Dashboard({ user }) {
   const absenMasuk = () => {
     setRecords((prev) => [
       ...prev,
-      { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: jam, jamPulang: '-', durasi: '-', ket: 'Masuk' },
+      { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: jam, jamPulang: '-', durasi: '-', ket: 'Menunggu Pulang' },
     ]);
   };
+
   const absenPulang = () => {
-    // cari record terakhir tanpa jam pulang
     setRecords((prev) => {
       const copy = [...prev];
       for (let i = copy.length - 1; i >= 0; i--) {
@@ -47,28 +55,38 @@ export default function Dashboard({ user }) {
           const start = copy[i].jamMasuk;
           const [sh, sm, ss] = start.split(':').map(Number);
           const startDate = new Date(now);
-          startDate.setHours(sh, sm, ss, 0);
+          startDate.setHours(sh || 0, sm || 0, ss || 0, 0);
           const diffMs = now - startDate;
-          const hh = Math.floor(diffMs / 3600000);
-          const mm = Math.floor((diffMs % 3600000) / 60000);
-          copy[i] = { ...copy[i], jamPulang: jam, durasi: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, ket: 'Selesai' };
+          const hh = Math.max(0, Math.floor(diffMs / 3600000));
+          const mm = Math.max(0, Math.floor((diffMs % 3600000) / 60000));
+          copy[i] = { ...copy[i], jamPulang: jam, durasi: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, ket: 'Belum Submit' };
           return copy;
         }
       }
-      // jika tidak ada, tambahkan entri pulang mandiri
+      // jika tidak ada record masuk, buat entri pulang mandiri (tetap butuh submit)
       return [
         ...copy,
-        { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: '-', jamPulang: jam, durasi: '00:00', ket: 'Pulang' },
+        { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: '-', jamPulang: jam, durasi: '00:00', ket: 'Belum Submit' },
       ];
     });
   };
 
+  const hasUnsubmitted = useMemo(() => {
+    return records.some(r => r.nama === (user?.name || 'Pengguna') && r.ket === 'Belum Submit');
+  }, [records, user?.name]);
+
   const submit = () => {
-    // in demo, submit hanya menambah catatan "Submit" tanpa logika tambahan
-    setRecords((prev) => [
-      ...prev,
-      { nama: user?.name || 'Pengguna', tanggal: tanggalLengkap, jamMasuk: '-', jamPulang: '-', durasi: '-', ket: 'Submit' },
-    ]);
+    // Submit hanya berfungsi ketika sudah absen pulang (ket: Belum Submit)
+    setRecords((prev) => {
+      const copy = [...prev];
+      for (let i = copy.length - 1; i >= 0; i--) {
+        if (copy[i].nama === (user?.name || 'Pengguna') && copy[i].ket === 'Belum Submit') {
+          copy[i] = { ...copy[i], ket: 'Terkonfirmasi' };
+          break;
+        }
+      }
+      return copy;
+    });
   };
 
   const exportCSV = () => {
@@ -84,6 +102,30 @@ export default function Dashboard({ user }) {
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveName = () => {
+    const newName = nameDraft.trim();
+    if (!newName) return;
+    onUpdateUser?.({ ...user, name: newName });
+    setIsEditing(false);
+  };
+
+  const handlePickPhoto = () => fileInputRef.current?.click();
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      onUpdateUser?.({ ...user, photo: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const avatarSrc = user?.photo
+    ? user.photo
+    : `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'User')}`;
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
@@ -94,11 +136,44 @@ export default function Dashboard({ user }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 mb-8">
-        <img src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'User')}`} alt="avatar" className="h-12 w-12 rounded-full border" />
+      <div className="flex flex-col items-center gap-4 mb-8">
+        <div className="relative">
+          <img src={avatarSrc} alt="avatar" className="h-16 w-16 rounded-full border object-cover" />
+          <button
+            onClick={handlePickPhoto}
+            className="absolute -bottom-2 -right-2 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white border border-slate-200 shadow hover:bg-slate-50"
+            title="Ubah foto profil"
+            type="button"
+          >
+            <ImagePlus className="h-4 w-4 text-slate-700" />
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+        </div>
+
         <div className="text-center">
           <p className="text-slate-500 text-sm">Karyawan</p>
-          <p className="text-slate-800 font-medium">{user?.name || 'Pengguna'}</p>
+          {!isEditing ? (
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-slate-800 font-medium">{user?.name || 'Pengguna'}</p>
+              <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700" title="Edit nama" type="button">
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2">
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                className="px-2 py-1 rounded border border-slate-300 focus:ring-2 focus:ring-sky-500 outline-none"
+              />
+              <button onClick={handleSaveName} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+                <Check className="h-4 w-4" /> Simpan
+              </button>
+              <button onClick={() => { setIsEditing(false); setNameDraft(user?.name || ''); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200">
+                <X className="h-4 w-4" /> Batal
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -111,11 +186,16 @@ export default function Dashboard({ user }) {
           <LogOut className="h-4 w-4" />
           Absen Pulang
         </button>
-        <button onClick={submit} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white shadow-sm transition">
+        <button
+          onClick={submit}
+          disabled={!hasUnsubmitted}
+          className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white shadow-sm transition ${hasUnsubmitted ? 'bg-violet-600 hover:bg-violet-700' : 'bg-violet-300 cursor-not-allowed'}`}
+          title={hasUnsubmitted ? 'Konfirmasi rekap' : 'Submit aktif setelah Absen Pulang'}
+        >
           Submit
         </button>
       </div>
-      <p className="text-center text-xs text-slate-500 mb-6">Tombol dapat digunakan demo hari pertama (multi klik akan tetap direkap).</p>
+      <p className="text-center text-xs text-slate-500 mb-6">Submit hanya aktif setelah Absen Pulang dan digunakan untuk mengkonfirmasi rekap.</p>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between p-4">
