@@ -31,7 +31,6 @@ export default function App() {
   function handleLogin(u) {
     setUser(u);
     localStorage.setItem('user', JSON.stringify(u));
-    // Placeholder: backend email notification would be triggered here via API
   }
 
   function handleLogout() {

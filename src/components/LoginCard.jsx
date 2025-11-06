@@ -1,22 +1,36 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function LoginCard({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setInfo('');
     setLoading(true);
     try {
-      // Simulasi login async
-      await new Promise((r) => setTimeout(r, 800));
       if (!email || !password) throw new Error('Masukkan email dan kata sandi');
-      const user = { name: email.split('@')[0] || 'Pengguna', email };
-      onLogin(user);
+      const base = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+      const res = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Gagal login');
+      }
+      onLogin(data.user);
+      if (data.email_notification === 'sent') {
+        setInfo('Email notifikasi terkirim');
+      } else if (typeof data.email_notification === 'string' && data.email_notification !== 'skipped') {
+        setInfo(`Email notifikasi gagal: ${data.email_notification}`);
+      }
     } catch (err) {
       setError(err.message || 'Terjadi kesalahan');
     } finally {
@@ -29,7 +43,18 @@ export default function LoginCard({ onLogin }) {
       <h2 className="text-xl font-semibold text-slate-900">Masuk</h2>
       <p className="text-sm text-slate-600 mb-4">Gunakan akun perusahaan Anda</p>
       <form onSubmit={handleSubmit} className="space-y-3">
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-red-600">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+        {info && (
+          <div className="flex items-center gap-2 text-sm text-emerald-600">
+            <CheckCircle2 size={16} />
+            <span>{info}</span>
+          </div>
+        )}
         <div className="relative">
           <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
